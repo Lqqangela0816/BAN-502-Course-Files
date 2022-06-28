@@ -1,0 +1,86 @@
+---
+title: "Ban502-M2-2"
+author: "Qingqing Li"
+date: "5/30/2022"
+output: word_document
+---
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+library(GGally)
+library(ggcorrplot)
+library(MASS)
+library(car)
+library(lubridate)
+library(lmtest)
+library(splines)
+```
+```{r}
+bike = read_csv("bike_cleaned-3.csv")
+```
+
+```{r}
+bike = bike %>% mutate(dteday = mdy(dteday))
+bike = bike %>% mutate_if(is.character, as_factor)
+bike = bike %>% mutate(hr = as_factor(hr))
+```
+
+```{r}
+ggpairs(bike,columns = c(10:16))
+```
+```{r}
+ggplot(bike, aes(x=season,y=count)) + geom_boxplot() + theme_bw()
+ggplot(bike, aes(x=season,y=count)) + geom_boxplot() + 
+  geom_jitter() + theme_bw()
+```
+```{r}
+bike_recipe = recipe(count ~ hr, bike) %>%
+  step_dummy(hr)
+lm_model =  
+  linear_reg() %>% 
+  set_engine("lm")
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, bike)
+summary(lm_fit$fit$fit$fit)
+```
+```{r}
+bike_recipe0 = recipe(count ~ hr + temp, bike) %>%
+  step_dummy(all_nominal())
+
+lm_model =  
+  linear_reg() %>% 
+  set_engine("lm") 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe0)
+
+lm_fit = fit(lm_wflow, bike)
+summary(lm_fit$fit$fit$fit)
+
+```
+
+```{r}
+bike_recipe1 = recipe(count ~ temp + atemp, bike) %>%
+  step_dummy(all_nominal())
+
+lm_model =  
+  linear_reg() %>% 
+  set_engine("lm") 
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_recipe1)
+
+lm_fit = fit(lm_wflow, bike)
+summary(lm_fit$fit$fit$fit)
+```
+

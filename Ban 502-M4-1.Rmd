@@ -1,0 +1,173 @@
+---
+title: "BAN502-M3-2"
+author: "Qingqing Li"
+date: "6/6/2022"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(e1071) #often needed for various statistical tasks
+library(ROCR)
+```
+```{r}
+parole = read_csv("parole.csv")
+str(parole)
+summary(parole)
+```
+```{r}
+parole =  parole %>% mutate(male = as_factor(male))
+parole = parole %>% mutate(race = as_factor(race))
+parole = parole %>% mutate(state = as_factor(state))
+parole = parole %>% mutate(crime = as_factor(crime))
+parole = parole %>% mutate(multiple.offenses = as_factor(multiple.offenses))
+parole = parole %>% mutate(violator = as_factor(violator))
+```
+```{r}
+str(parole)
+summary(parole)
+```
+```{r}
+parole = parole %>%  mutate(male, fct_recode(male, "male"="1","female"= "0"))
+```
+
+
+```{r}
+parole = parole %>% mutate(violator = fct_recode(violator,"NO"="0","YES"= "1"))
+parole = parole %>% mutate(race = fct_recode(race,"WHITE"="1","OTHERWISE"= "2"))
+parole = parole %>% mutate(state = fct_recode(state,"other state" = "1","Knetucky"="2","lOUISIANA"= "3","VIRGINIA" ="4"))
+parole = parole %>% mutate(crime = fct_recode(crime,"larceny"="2","drug-related crime"= "3","driving-related"= "4","any other crime"= "1"))
+
+```
+
+```{r}
+set.seed(12345)
+parole_split = initial_split(parole, prop = 0.70, strata = violator)
+train = training(parole_split)
+test = testing(parole_split)
+levels(train$violator)
+```
+```{r}
+train = train %>% mutate(violator = fct_relevel(violator, c("No","Yes")))
+levels(train$violator)
+```
+
+```{r}
+ggplot(train, aes(x= male)) + geom_bar()
+
+```
+```{r}
+t1 = table(parole$male,parole$violator)
+prop.table(t1, margin = 2)
+```
+
+```{r}
+ggplot(train, aes(x= state)) + geom_bar()
+```
+```{r}
+ggplot(train, aes(x= max.sentence)) + geom_bar()
+```
+```{r}
+parole_model = 
+  logistic_reg(mode = "classification") %>%
+  set_engine("glm")
+
+parole_recipe = recipe(violator ~ state, train)
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>% 
+  add_model(parole_model)
+
+parole_fit = fit(logreg_wf, train)
+```
+```{r}
+summary(parole_fit$fit$fit$fit)
+```
+
+```{r}
+parole_model = 
+  logistic_reg(mode = "classification") %>% #note the use of logistic_reg and mode = "classification"
+  set_engine("glm") #standard logistic regression engine is glm
+
+parole_recipe1 = recipe(violator ~ state+multiple.offenses+race,parole)
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe1) %>% 
+  add_model(parole_model)
+
+parole_fit1 = fit(logreg_wf, train)
+summary(parole_fit1$fit$fit$fit)
+```
+```{r}
+new_data = data.frame(race="WHITE",state= "lOUISIANA",multiple.offenses ="1")
+predictions = predict(parole_fit1,new_data,type="prob") #develop predicted probabilities
+head(predictions)
+```
+
+```{r}
+predictions = predict(parole_fit1,new_data, type="prob")[2]
+head(predictions)
+```
+
+```{r}
+predictions = predict(parole_fit1, train, type="prob") #develop predicted probabilities
+head(predictions)
+```
+```{r}
+predictions = predict(parole_fit1, train, type="prob")[2]
+head(predictions)
+```
+```{r}
+ROCRpred = prediction(predictions, train$violator) 
+```
+
+```{r}
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+```{r}
+t1 = table(train$violator,predictions > 0.2015788)
+t1
+```
+
+```{r}
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+```{r}
+t2 = table(train$violator,predictions > 0.3)
+t2
+(t2[1,1]+t2[2,2])/nrow(train)
+```
+
+```{r}
+t3 = table(train$violator,predictions > 0.4)
+t3
+(t3[1,1]+t3[2,2])/nrow(train)
+```
+
+```{r}
+t4 = table(train$violator,predictions > 0.5)
+t4
+(t4[1,1]+t4[2,2])/nrow(train)
+```
+
+
+
+
